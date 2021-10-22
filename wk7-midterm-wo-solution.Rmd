@@ -1,0 +1,313 @@
+---
+title: "CSCI E-63C: Midterm Exam"
+output:
+  html_document:
+    toc: true
+---
+
+# Introduction
+
+*The goal of the midterm exam is to apply some of the methods covered in our course by now to a new dataset.  We will work with the data characterizing real estate valuation in New Taipei City, Taiwan that is available at [UCI ML repository](https://archive.ics.uci.edu/ml/datasets/Real+estate+valuation+data+set) as well as at this course website on canvas. The overall goal will be to use data modeling approaches to understand which attributes available in the dataset influence real estate valuation the most.  The outcome attribute (Y -- house price of unit area) is inherently continuous, therefore representing a regression problem.*
+
+*For more details please see dataset description available at UCI ML or corresponding [HTML file](https://canvas.harvard.edu/courses/79740/files/10495424/download) on canvas website for this course.  For simplicity, clarity and to decrease your dependency on the network reliability and UCI ML or canvas website availability during the time that you will be working on this project you are advised to download data made available on the canvas website to your local folder and work with the local copy. The dataset at UCI ML repository as well as its copy on our course canvas website is provided as an Excel file [Real estate valuation data set.xlsx](https://canvas.harvard.edu/courses/79740/files/10495420/download) -- you can either use `read_excel` method from R package `readxl` to read this Excel file directly or convert it to comma or tab-delimited format in Excel so that you can use `read.table` on the resulting file with suitable parameters (and, of course, remember to double check that in the end what you have read into your R environment is what the original Excel file contains).*
+
+*Finally, as you will notice, the instructions here are much terser than in the previous problem sets. We expect that you use what you've learned in the class to complete the analysis and draw appropriate conclusions based on the data.  The approaches that you are expected to apply here have been exercised in the preceeding weeks -- please feel free to consult your submissions and/or official solutions as to how they have been applied to different datasets.  As always, if something appears to be unclear, please ask questions -- note that we may decide to change your questions to private mode as we see fit, if in our opinion they reveal too many specific details of the problem solution.*
+
+# Sub-problem 1: load and summarize the data (20 points)
+
+*Download and read in the data, produce numerical and graphical summaries of the dataset attributes, decide whether they can be used for modeling in untransformed form or any transformations are justified, comment on correlation structure and whether some of the predictors suggest relationship with the outcome.*
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+install.packages("glmnet", repos='http://cran.us.r-project.org')
+install.packages("readxl", repos='http://cran.us.r-project.org')
+library(readxl)
+(setwd("~/"))
+Taipei <- read.table("Real estate valuation data set .csv", sep = ",", header = TRUE)
+colnames(Taipei)
+Taipei <- Taipei [-1]
+head(Taipei)
+colnames(Taipei)
+dim(Taipei)
+summary(Taipei)
+Taipei2 <- Taipei[,c(7,1,2,3,4,5,6)]
+colnames(Taipei2)
+install.packages("GGally", repos='http://cran.us.r-project.org')
+library(GGally)
+ggpairs(Taipei2, upper = list(continuous = wrap("cor", size=2)))
+pairs(Taipei2, pch =24, cex = .6, col = "blue")
+cor(Taipei2)
+
+Taipeilog <- log(Taipei2+1)
+summary(Taipeilog)
+library(colorspace)
+ggpairs(Taipeilog, upper = list(continuous = wrap("cor", size=2)))
+
+cor(Taipeilog)
+
+install.packages("ggplot2")
+library(ggplot2)
+Taipeicorr <- cor(Taipei2)
+ggcorrplot::ggcorrplot(Taipeicorr, type = "lower", title = "Untransformed Heat Map")
+
+Taipeicorrlog <- cor(Taipeilog)
+ggcorrplot::ggcorrplot(Taipeicorrlog, type = "lower", title ="Transformed Heat Map")
+
+old.par <- par(mfrow=c(2,6), ps=18)
+lapply(seq(Taipei2), function(x)
+  hist(x=Taipei2[[x]], xlab=names(Taipei2)[x], main = paste('', names(Taipei2)[x])))
+
+lapply(seq(Taipeilog), function(x)
+  hist(x=Taipeilog[[x]], xlab=names(Taipeilog)[x], main = paste('', names(Taipeilog)[x])))
+par(old.par)
+
+```
+## Comments for Problem 1:
+    This data has 6 predictors and 1 outcome. All of the data are quantitative. Looking at some of the histograms a few interesting things to note, most of the houses are under 20 years in age, although there is enough older homes to make the data important.  There are very few houses under 70 units, with a few outliers. Most of the homes are under 1500 meters to the nearest MRT station, with a large amount inside 500 meters. The untransformed data is more skewed than the transformed data. As you can see with the ggpairs the log data has more normal distribution with X3 and X4 showing substantial improvement. For correlation the transformed data shows X3,X4,X5, and X6 all having over .5 correlation to House price, however X3 has negative correlation to the price. While negative, X3 has the highest overall correlation (-.762). This increased from -.673 of the untransformed data. The untransformed did show similar correlation numbers, but not as strong. Since the untransformed data does not show as strong of correlation and because much of its data does not show normal distribution I will use the transformed data for the remainder of the problem set. 
+
+
+# Sub-problem 2: multiple linear regression model (25 points)
+
+*Using function `lm` fit model of outcome as linear function of all predictors in the dataset. Present and discuss diagnostic plots. Report 99% confidence intervals for model parameters that are statistically significantly associated with the outcome and discuss directions of those associations. Obtain mean prediction (and corresponding 90% confidence interval) for a new observation with each attribute set to average of the observations in the dataset. Describe evidence for potential collinearity among predictors in the model.*
+
+```{r}
+
+colnames(Taipeilog)<- make.names(colnames(Taipeilog))
+colnames(Taipeilog)
+Taipeilm <- lm(Y.house.price.of.unit.area~ X1.transaction.date+ X2.house.age + X3.distance.to.the.nearest.MRT.station + X4.number.of.convenience.stores+ X5.latitude + X6.longitude, data = Taipeilog)
+summary(Taipeilm)
+old.par <- par(mfrow=c(2,2))
+plot(Taipeilm)
+par(old.par)
+
+confint(Taipeilm, level = .99)
+
+meanp <- as.data.frame(as.list(colMeans(Taipeilog)))
+meanp
+meanpred <-predict(Taipeilm, newdata = meanp, interval = 'prediction', level = .9)
+head(meanpred)
+
+
+
+install.packages("car", repos='http://cran.us.r-project.org')
+library(car)
+vif(Taipeilm)
+```
+###Comments on Problem 2
+ As per problem 1 I went with just the transformed data. Running a fit model on the predictors p values of all 6 predictors are low enough so that all predictors are considered significant. R^2 is also a decent number so as to consider this a good model for the data. The diagnostic plots show a strong model. There does not appear to be heteroscedasticity as per the residual vs fitted chart (red line does not curve) so residuals show a constant variance, The residuals vs leverage chart shows a few outliers, but none strong enough to be considered a concern. The QQ plot shows the residuals to be relatively normal, except at the very end, but overall it appears to have normal distribution. None of the predictors cross zero on the confidence interval, therefore they confirm the pvalue scores and they should all be considered significant. There is really no issue of collinearity as all predictors have relatively low VIF scores, with X3 as highest at 2.59. The predicted scores with 90% confidence show expected levels at 90% confidence level similar to mean of house price. 
+
+
+# Sub-problem 3: choose optimal models by exhaustive, forward and backward selection (20 points)
+
+*Use `regsubsets` from library `leaps` to choose optimal set of variables for modeling real estate valuation and describe differences and similarities between attributes deemed most important by these approaches.*
+
+```{r,fig.width=8,fig.height=8}
+
+library(leaps)
+
+colnames(Taipeilog)
+
+for ( myMthd in c("exhaustive", "backward", "forward", "seqrep") ) {
+rsRes <- regsubsets(Y.house.price.of.unit.area~.,Taipeilog,method=myMthd,nvmax=15)
+summRes <- summary(rsRes)
+whichAll[[myMthd]] <- summRes$which
+for ( metricName in c("rsq","rss","adjr2","cp","bic") ) {
+summaryMetrics <- rbind(summaryMetrics,
+data.frame(method=myMthd,metric=metricName,
+nvars=1:length(summRes[[metricName]]),
+value=summRes[[metricName]]))
+}
+}
+ggplot(summaryMetrics,aes(x=nvars,y=value,shape=method,colour=method)) + geom_path() + geom_point() + facet_wrap(~metric,scales="free") +   theme(legend.position="top")+theme_bw()
+```
+
+
+```{r,fig.width=8,fig.height=8}
+
+old.par <- par(mfrow=c(2,2),ps=16,mar=c(5,7,2,1))
+for ( myMthd in names(whichAll) ) {
+  image(1:nrow(whichAll[[myMthd]]),
+        1:ncol(whichAll[[myMthd]]),
+        whichAll[[myMthd]],xlab="N(vars)",ylab="",
+        xaxt="n",yaxt="n",breaks=c(-0.5,0.5,1.5),
+        col=c("white","gray"),main=myMthd)
+  axis(1,1:nrow(whichAll[[myMthd]]),rownames(whichAll[[myMthd]]))
+  axis(2,1:ncol(whichAll[[myMthd]]),colnames(whichAll[[myMthd]]),las=2)
+}
+par(old.par)
+
+
+
+```
+###Comments on Problem 3
+
+The 4 selection methods show that all 6 predictors should be used for best resuls. Segrep diverges at 4 variables, but comes back in line by 5 and proves to have 6 predictors as best when all is said and done. All 4 methods show the biggest jumps up until 4 variables, and although the path continues toward 6 predictors as best, the slope does drastically slows down. As for variable membership, again seqrep seems to deviate a little as it has X4 and X5 switched when compared to the others. But all of the charts show 6.
+
+
+# Sub-problem 4: optimal model by resampling (20 points)
+
+*Use cross-validation or any other resampling strategy of your choice to estimate test error for models with different numbers of variables.  Compare and comment on the number of variables deemed optimal by resampling versus those selected by `regsubsets` in the previous task.*
+
+```{r  regsubsetsTrainTest,fig.width=12,fig.height=6}
+
+predict.regsubsets <- function (object, newdata, id, ...){
+  form=as.formula(object$call [[2]])
+  mat=model.matrix(form,newdata)
+  coefi=coef(object,id=id)
+  xvars=names (coefi)
+  mat[,xvars] %*% coefi
+}
+dfTmp <-NULL
+whichSum <- array(0,dim=c(6,7,4),
+dimnames=list(NULL,colnames(model.matrix(Y.house.price.of.unit.area~.,Taipeilog)),
+c("exhaustive", "backward", "forward", "seqrep")))
+nTries <- 30
+
+
+for ( iTry in 1:nTries ) {
+bTrain <- sample(rep(c(TRUE,FALSE),length.out=nrow(Taipeilog)))
+for ( jSelect in c("exhaustive", "backward", "forward", "seqrep") ) {
+rsTrain <- regsubsets(Y.house.price.of.unit.area~.,Taipeilog[bTrain,],nvmax=6,method=jSelect)
+whichSum[,,jSelect] <- whichSum[,,jSelect] + summary(rsTrain)$which
+for ( kVarSet in 1:6 ) {
+testPred <- predict(rsTrain,Taipeilog[!bTrain,],id=kVarSet)
+mseTest <- mean((testPred-Taipeilog[!bTrain,"Y.house.price.of.unit.area"])^2)
+dfTmp <- rbind(dfTmp,data.frame(sim=iTry,sel=jSelect,vars=kVarSet,
+mse=c(mseTest,summary(rsTrain)$rss[kVarSet]/sum(bTrain)),trainTest=c("test","train")))
+}
+}
+}
+ggplot(dfTmp,aes(x=factor(vars),y=mse,colour=sel)) + geom_boxplot()+facet_wrap(~trainTest)+theme_bw()
+
+old.par <- par(mfrow=c(2,2),ps=16,mar=c(5,7,2,1))
+for ( myMthd in dimnames(whichSum)[[3]] ) {
+  tmpWhich <- whichSum[,,myMthd] / nTries
+  image(1:nrow(tmpWhich),1:ncol(tmpWhich),tmpWhich,
+        xlab="N(vars)",ylab="",xaxt="n",yaxt="n",main=myMthd,
+        breaks=c(-0.1,0.1,0.25,0.5,0.75,0.9,1.1),
+        col=c("white","gray90","gray75","gray50","gray25","gray10"))
+  axis(1,1:nrow(tmpWhich),rownames(tmpWhich))
+  axis(2,1:ncol(tmpWhich),colnames(tmpWhich),las=2)
+}
+par(old.par)
+
+```
+###Comments on Problem 4
+
+ The test error is a bit higher than the train error groups, but both show an improvement in overall error as the variables increase. MSE for test range from just under .3 to a little over .75, while train goes from .25 to around .73 or so. The number of optimal variables after resampling continues to be 6, just as it was in the previous regsubset. The greyscale plots show little difference from previous charts. Even after the resampling and conducting test and train datasets the conclusion of best variable numbers remains the same. 
+
+
+
+# Sub-problem 5: variable selection by lasso (15 points)
+
+*Use regularized approach (i.e. lasso) to model property valuation.  Compare resulting models (in terms of number of variables and their effects) to those selected in the previous two tasks (by `regsubsets` and resampling), comment on differences and similarities among them.*
+
+```{r}
+
+library(glmnet)
+x <- model.matrix(Y.house.price.of.unit.area~.,Taipeilog)[,-1]
+head(x)
+y <- Taipeilog[,"Y.house.price.of.unit.area"]
+lassoRes <- glmnet(x,y,alpha=1)
+plot(lassoRes)
+
+cvLassoRes <- cv.glmnet(x,y,alpha=1)
+plot(cvLassoRes)
+
+cvLassoRes <- cv.glmnet(x,y,alpha=1,lambda=10^((-120:0)/20))
+plot(cvLassoRes)
+
+predict(lassoRes,type="coefficients",s=cvLassoRes$lambda.1se)
+predict(lassoRes,type="coefficients",s=cvLassoRes$lambda.min)
+
+lassoResScaled <- glmnet(scale(x),y,alpha=1)
+plot(lassoResScaled)
+
+cvLassoResScaled <- cv.glmnet(scale(x),y,alpha=1)
+plot(cvLassoResScaled)
+predict(lassoResScaled,type="coefficients",s=cvLassoResScaled$lambda.1se)
+
+lassoCoefCnt <- 0
+lassoMSE <- NULL
+for ( iTry in 1:30 ) {
+  bTrain <- sample(rep(c(TRUE,FALSE),length.out=nrow(x)))
+  cvLassoTrain <- cv.glmnet(x[bTrain,],y[bTrain],alpha=1)
+  lassoTrain <- glmnet(x[bTrain,],y[bTrain],alpha=1)
+  lassoTrainCoef <- predict(lassoTrain,type="coefficients",s=cvLassoTrain$lambda.1se)
+  lassoCoefCnt <- lassoCoefCnt + (lassoTrainCoef[-1,1]!=0)
+  lassoTestPred <- predict(lassoTrain,newx=x[!bTrain,],s=cvLassoTrain$lambda.1se)
+  lassoMSE <- c(lassoMSE,mean((lassoTestPred-y[!bTrain])^2))
+}
+mean(lassoMSE)
+lassoCoefCnt
+
+
+```
+
+#### Comments on Problem 5
+   Using lasso with resampling X3, X4, and X5 appear in all 30 tries, while X2 and X6 and in 29 and 26 respectively. Only X1 appears in a low number of 12, or 40%. The lasso prediction has X2 as strongest importance with X1 as weakest. The mean of MSE is .0477. While the resampling and greyscale charts suggest 6 variables is preferable, the lasso regularization suggests 5 may be best. 
+
+
+
+# Extra points problem: using higher order terms (10 points)
+
+*Evaluate the impact of adding non-linear terms to the model.  Describe which terms, if any, warrant addition to the model and what is the evidence supporting their inclusion.  Evaluate, present and discuss the effect of their incorporation on model coefficients and test error estimated by resampling.*
+
+```{r}
+colnames(Taipei2)<- make.names(colnames(Taipei2))
+colnames(Taipei2)
+
+library(ISLR)
+set.seed(1)
+pairs(Taipei2)
+rss = rep(NA, 10)
+fits = list()
+for (d in 1:10) {
+  fits[[d]] = lm(Y.house.price.of.unit.area ~ poly(X2.house.age, d), data = Taipei2)
+  rss[d] = deviance(fits[[d]])
+}
+rss
+anova(fits[[1]], fits[[2]], fits[[3]], fits[[4]])
+library(glmnet)
+library(boot)
+cv.errs = rep(NA, 15)
+for (d in 1:15) {
+  fit = glm(Y.house.price.of.unit.area~ poly(X2.house.age, d), data = Taipei2)
+  cv.errs[d] = cv.glm(Auto, fit, K = 10)$delta[2]
+}
+
+which.min(cv.errs)
+cv.errs
+
+cv.errs = rep(NA, 10)
+for (c in 2:10) {
+  Taipei2$X2.cut = cut(Taipei2$X2.house.age, c)
+  fit = glm(Y.house.price.of.unit.area ~ X2.cut, data = Taipei2)
+  cv.errs[c] = cv.glm(Taipei2, fit, K = 10)$delta[2]
+}
+
+which.min(cv.errs)
+cv.errs
+
+
+library(splines)
+cv.errs = rep(NA, 10)
+for (df in 3:10) {
+  fit = glm(Y.house.price.of.unit.area ~ ns(X2.house.age, df = df), data = Taipei2)
+  cv.errs[df] = cv.glm(Taipei2, fit, K = 10)$delta[2]
+}
+which.min(cv.errs)
+cv.errs
+
+library(gam)
+fit = gam(Y.house.price.of.unit.area ~ s(X2.house.age, 4) + s(X3.distance.to.the.nearest.MRT.station, 4)+ s(X4.number.of.convenience.stores, 4)+ s(X5.latitude, 4)+ s(X6.longitude, 4)+ s(X1.transaction.date, 4), data = Taipei2)
+summary(fit)
+```
+Comments on Extra credit:
+Running Gam creates a different view of the predictors. Here, only X2, X3, and X5 are proven significant by their p values, so would only use 3 variables as opposed to the 6 seen in previous problem sets. 
+
+```{r}
